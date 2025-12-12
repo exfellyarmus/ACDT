@@ -43,6 +43,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", type=str, default="yolov8s-pose.pt", help="YOLOv8 pose model path")
     parser.add_argument("--conf_thr", type=float, default=0.3, help="Confidence threshold for detections/keypoints")
     parser.add_argument("--output", type=Path, default=Path("pose_features.csv"), help="Output CSV path")
+    parser.add_argument(
+        "--viz_dir",
+        type=Path,
+        default=None,
+        help="If set, save annotated predictions for each processed image to this directory.",
+    )
     return parser.parse_args()
 
 
@@ -127,6 +133,8 @@ def extract_features(args: argparse.Namespace) -> pd.DataFrame:
     rows: List[Dict[str, float]] = []
     processed = 0
     skipped = 0
+    if args.viz_dir:
+        args.viz_dir.mkdir(parents=True, exist_ok=True)
     for label_name, label_id in ("good", 0), ("bad", 1):
         label_dir = args.data_dir / label_name
         if not label_dir.exists():
@@ -171,6 +179,16 @@ def extract_features(args: argparse.Namespace) -> pd.DataFrame:
             processed += 1
             if processed % 10 == 0:
                 print(f"Processed {processed} images...")
+
+            if args.viz_dir:
+                annotated = res.plot(boxes=True, kpts=True)
+                out_path = args.viz_dir / f"{img_path.stem}_pred.jpg"
+                try:
+                    import cv2
+
+                    cv2.imwrite(str(out_path), annotated)
+                except Exception as exc:  # pragma: no cover - optional visualization
+                    print(f"[WARN] Failed to save visualization for {img_path}: {exc}")
     print(f"Extraction done. Processed: {processed}, Skipped: {skipped}")
     return pd.DataFrame(rows)
 
